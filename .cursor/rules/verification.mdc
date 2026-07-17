@@ -1,0 +1,24 @@
+---
+description: Required validation and release safeguards
+alwaysApply: true
+---
+
+# Verification
+
+Run checks in proportion to the change:
+
+- Go changes: `go test ./...` and `go vet ./...`.
+- Frontend changes: run `npm run build` from `frontend/`.
+- Build, metadata, icon, binding, or release changes: run
+  `wails3 task build`.
+- Workflow changes: account for clean checkouts; `frontend/dist` is ignored
+  but required by the root `go:embed` directive before Go package checks.
+- Generated Wails bindings must match the Go service and model definitions.
+- Confirm `git diff --check` before committing.
+
+Release safeguards:
+
+- Never create or push a version tag without explicit user approval.
+- Never publish, edit, or delete a GitHub Release without explicit approval.
+- A release must only be cut from a green CI commit.
+- Verify the published executable and `.sha256` asset after release.

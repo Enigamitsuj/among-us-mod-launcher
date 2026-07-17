@@ -1,0 +1,23 @@
+---
+description: Core architecture and toolchain context for the launcher
+alwaysApply: true
+---
+
+# Project Context
+
+- This is a Windows-first Among Us community mod launcher built with Go,
+  Wails v3, React, TypeScript, Tailwind CSS, and Framer Motion.
+- Town of Us: Mira is the first supported mod; platform-specific assets come
+  from its GitHub Releases.
+- `internal/appservice/` is the Wails API boundary.
+- `internal/game/` owns storefront detection and compatibility.
+- `internal/installer/` owns download, extraction, and atomic installation.
+- `internal/installrecord/` owns launcher-management markers.
+- `internal/mods/` contains the registry and shared models.
+- `frontend/src/` contains UI source; `frontend/bindings/` is generated.
+- Keep backend packages independent of React and keep UI logic out of Go
+  packages except through the app service boundary.
+- Match CI: Go 1.25+, Node 22+, Wails `v3.0.0-alpha2.117`.
+- Git tags (`vX.Y.Z`) are the release-version source of truth.
+- Windows releases are currently unsigned, so preserve SmartScreen and SHA256
+  guidance until Authenticode signing is implemented.

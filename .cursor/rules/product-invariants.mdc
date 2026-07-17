@@ -1,0 +1,20 @@
+---
+description: Preserve launcher safety and product behavior
+alwaysApply: true
+---
+
+# Product Invariants
+
+- Never modify the original Among Us installation.
+- Install each mod beside the detected game in its own stable folder.
+- Only uninstall folders containing a valid launcher ownership record.
+- Keep updates atomic: stage the new install, swap it into place, and retain the
+  previous working copy if promotion fails.
+- Treat protected game locations such as Program Files explicitly; show an
+  actionable error instead of silently changing the destination.
+- Keep install state tied to the selected mod release versus the recorded
+  installed release.
+- Use friendly user-facing errors without stack traces or internal details.
+- Do not add desktop shortcuts, arbitrary install paths, or automatic launch
+  after installation unless the product requirements explicitly change.
+- Do not redistribute Among Us or imply affiliation with Innersloth.
