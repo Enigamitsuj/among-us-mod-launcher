@@ -1,0 +1,27 @@
+{
+  "name": "among-us-mod-launcher",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build:dev": "tsc && vite build --minify false --mode development",
+    "build": "tsc && vite build --mode production",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@wailsio/runtime": "latest",
+    "framer-motion": "^12.23.12",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.11",
+    "@types/react": "^18.3.23",
+    "@types/react-dom": "^18.3.7",
+    "@vitejs/plugin-react": "^6.0.0",
+    "tailwindcss": "^4.1.11",
+    "typescript": "^5.8.3",
+    "vite": "^8.0.5"
+  }
+}

@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Name=My Product
+Comment=A among-us-mod-launcher application
+# The Exec line includes %u to pass the URL to the application
+Exec=/usr/local/bin/among-us-mod-launcher.exe %u
+Terminal=false
+Type=Application
+Icon=among-us-mod-launcher.exe
+Categories=Utility;
+StartupWMClass=among-us-mod-launcher.exe
+
+ 
