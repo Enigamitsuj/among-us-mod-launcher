@@ -34,7 +34,7 @@ func main() {
 		},
 	})
 
-	const width, height = 1180, 720
+	const width, height = 1220, 780
 
 	window := app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:             "Among Us Mod Launcher",

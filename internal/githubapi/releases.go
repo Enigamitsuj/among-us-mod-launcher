@@ -8,25 +8,28 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Enigamitsuj/among-us-mod-launcher/internal/game"
 	"github.com/Enigamitsuj/among-us-mod-launcher/internal/mods"
 )
 
 const apiBase = "https://api.github.com"
 
 type releaseDTO struct {
-	TagName    string    `json:"tag_name"`
-	Name       string    `json:"name"`
-	Body       string    `json:"body"`
+	TagName     string    `json:"tag_name"`
+	Name        string    `json:"name"`
+	Body        string    `json:"body"`
 	PublishedAt time.Time `json:"published_at"`
-	Prerelease bool      `json:"prerelease"`
-	Draft      bool      `json:"draft"`
-	HTMLURL    string    `json:"html_url"`
-	Assets     []struct {
-		Name               string `json:"name"`
-		BrowserDownloadURL string `json:"browser_download_url"`
-		Size               int64  `json:"size"`
-		ContentType        string `json:"content_type"`
-	} `json:"assets"`
+	Prerelease  bool      `json:"prerelease"`
+	Draft       bool      `json:"draft"`
+	HTMLURL     string    `json:"html_url"`
+	Assets      []assetDTO `json:"assets"`
+}
+
+type assetDTO struct {
+	Name               string `json:"name"`
+	BrowserDownloadURL string `json:"browser_download_url"`
+	Size               int64  `json:"size"`
+	ContentType        string `json:"content_type"`
 }
 
 // Client talks to the GitHub Releases API.
@@ -40,8 +43,8 @@ func NewClient() *Client {
 	}
 }
 
-// ListReleases fetches non-draft releases for a mod's GitHub repo.
-func (c *Client) ListReleases(owner, repo string, limit int) ([]mods.Release, error) {
+// ListReleases fetches non-draft releases, picking the ZIP that matches platform.
+func (c *Client) ListReleases(owner, repo string, platform game.Platform, limit int) ([]mods.Release, error) {
 	if owner == "" || repo == "" {
 		return nil, fmt.Errorf("GitHub repository is not configured for this mod")
 	}
@@ -74,12 +77,13 @@ func (c *Client) ListReleases(owner, repo string, limit int) ([]mods.Release, er
 		return nil, fmt.Errorf("failed to read GitHub releases")
 	}
 
+	hint := game.AssetPattern(platform)
 	out := make([]mods.Release, 0, len(raw))
 	for _, r := range raw {
 		if r.Draft {
 			continue
 		}
-		assetName, assetURL, assetSize := pickZipAsset(r.Assets)
+		assetName, assetURL, assetSize, matched := pickZipAsset(r.Assets, hint)
 		if assetURL == "" {
 			continue
 		}
@@ -97,48 +101,42 @@ func (c *Client) ListReleases(owner, repo string, limit int) ([]mods.Release, er
 			DownloadName:   assetName,
 			DownloadSize:   assetSize,
 			HTMLURL:        r.HTMLURL,
+			AssetMatched:   matched,
+			AssetHint:      hint,
 		})
 	}
 	return out, nil
 }
 
-// Categorize splits releases into latest / stable / beta helpers for the UI.
-func Categorize(releases []mods.Release) (latest, stable, beta *mods.Release) {
-	for i := range releases {
-		r := &releases[i]
-		if latest == nil {
-			latest = r
-		}
-		if r.Prerelease {
-			if beta == nil {
-				beta = r
+func pickZipAsset(assets []assetDTO, hint string) (name, url string, size int64, matched bool) {
+	hint = strings.ToLower(strings.TrimSpace(hint))
+
+	if hint != "" {
+		for _, a := range assets {
+			lower := strings.ToLower(a.Name)
+			if strings.HasSuffix(lower, ".zip") && strings.Contains(lower, hint) {
+				return a.Name, a.BrowserDownloadURL, a.Size, true
 			}
-			continue
-		}
-		if stable == nil {
-			stable = r
 		}
 	}
-	return latest, stable, beta
-}
 
-func pickZipAsset(assets []struct {
-	Name               string `json:"name"`
-	BrowserDownloadURL string `json:"browser_download_url"`
-	Size               int64  `json:"size"`
-	ContentType        string `json:"content_type"`
-}) (name, url string, size int64) {
+	// Prefer any windows zip over mac/linux when hint missing/unmatched.
+	for _, a := range assets {
+		lower := strings.ToLower(a.Name)
+		if !strings.HasSuffix(lower, ".zip") {
+			continue
+		}
+		if strings.Contains(lower, "macos") || strings.Contains(lower, "linux") {
+			continue
+		}
+		return a.Name, a.BrowserDownloadURL, a.Size, false
+	}
+
 	for _, a := range assets {
 		lower := strings.ToLower(a.Name)
 		if strings.HasSuffix(lower, ".zip") {
-			return a.Name, a.BrowserDownloadURL, a.Size
+			return a.Name, a.BrowserDownloadURL, a.Size, false
 		}
 	}
-	for _, a := range assets {
-		lower := strings.ToLower(a.Name)
-		if strings.Contains(lower, "zip") || strings.Contains(a.ContentType, "zip") {
-			return a.Name, a.BrowserDownloadURL, a.Size
-		}
-	}
-	return "", "", 0
+	return "", "", 0, false
 }

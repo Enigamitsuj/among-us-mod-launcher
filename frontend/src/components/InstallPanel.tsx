@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { motion } from "framer-motion";
 import type {
   GameStatus,
@@ -8,6 +8,7 @@ import type {
   Release,
 } from "../../bindings/github.com/Enigamitsuj/among-us-mod-launcher/internal/mods/models";
 import { ProgressBar } from "./ProgressBar";
+import { VersionSelect } from "./VersionSelect";
 
 type Props = {
   mods: Mod[];
@@ -22,6 +23,7 @@ type Props = {
   launchAfter: boolean;
   onToggleShortcut: (v: boolean) => void;
   onToggleLaunch: (v: boolean) => void;
+  onBrowseInstallLocation: () => void;
   installState: InstallState | null;
   progress: InstallProgress | null;
   busy: boolean;
@@ -44,6 +46,7 @@ export function InstallPanel(props: Props) {
     launchAfter,
     onToggleShortcut,
     onToggleLaunch,
+    onBrowseInstallLocation,
     installState,
     progress,
     busy,
@@ -52,34 +55,66 @@ export function InstallPanel(props: Props) {
     onPlay,
   } = props;
 
-  const channels = useMemo(() => {
-    const latest = releases[0];
-    const stable = releases.find((r) => !r.prerelease);
-    const beta = releases.find((r) => r.prerelease);
-    return { latest, stable, beta };
-  }, [releases]);
-
   const installed = Boolean(installState?.installed);
+  const selectedRelease = releases.find((r) => r.tagName === selectedTag) ?? null;
+  const releaseInstallable = selectedRelease ? selectedRelease.installable : false;
+
   const canInstall =
     Boolean(selectedMod?.enabled) &&
     Boolean(game?.found) &&
     !game?.running &&
     Boolean(selectedTag) &&
+    releaseInstallable &&
+    Boolean(installLocation) &&
     !busy;
 
+  const installTarget = installLocation
+    ? `${installLocation}\\${selectedMod?.folderName ?? ""}`
+    : "Next to launcher";
+
+  // Status is driven by the selected release's compatibility with the game.
+  const statusText = error
+    ? error
+    : busy && progress
+      ? progress.message
+      : installed
+        ? "Ready to play"
+        : selectedRelease?.compatReason
+          ? selectedRelease.compatReason
+          : game?.message ?? "Checking...";
+
+  const statusTone: "ok" | "warn" | "bad" = error
+    ? "bad"
+    : !game?.found || game.running
+      ? "bad"
+      : selectedRelease?.compatLevel === "unsupported"
+        ? "bad"
+        : selectedRelease?.compatLevel === "caution"
+          ? "warn"
+          : releaseInstallable
+            ? "ok"
+            : "warn";
+
+  const versionLabel =
+    game?.version && game.version !== "unknown" ? `v${game.version.replace(/^v/i, "")}` : "version unknown";
+
   return (
-    <section className="flex h-full flex-col rounded-2xl border border-white/10 bg-panel/90 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-      <header className="mb-4">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-purple">Community Installer</p>
-        <h2 className="mt-1 text-2xl font-bold text-white">
+    <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-white/10 bg-panel/90 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+      {/* Identity */}
+      <header className="shrink-0">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-purple">
+          Community Installer
+        </p>
+        <h2 className="mt-1 text-xl font-bold tracking-tight text-white">
           Install {selectedMod?.shortName ?? "Mod"}
         </h2>
-        <p className="mt-2 text-sm leading-relaxed text-muted">
+        <p className="mt-1.5 line-clamp-2 text-[13px] leading-snug text-muted">
           {selectedMod?.description ?? "Select a mod to get started."}
         </p>
       </header>
 
-      <div className="mb-4 flex flex-wrap gap-2">
+      {/* Mod switcher */}
+      <div className="mt-3 flex shrink-0 gap-2">
         {mods.map((mod) => {
           const active = selectedMod?.id === mod.id;
           return (
@@ -89,114 +124,160 @@ export function InstallPanel(props: Props) {
               disabled={mod.comingSoon}
               onClick={() => onSelectMod(mod)}
               className={[
-                "rounded-xl border px-3 py-2 text-left text-sm transition",
+                "min-w-0 flex-1 rounded-xl border px-3 py-2 text-left transition",
                 active
                   ? "border-purple/60 bg-purple/15 text-white glow-purple"
                   : "border-line bg-panel-2 text-muted hover:border-white/20 hover:text-white",
                 mod.comingSoon ? "cursor-not-allowed opacity-50" : "",
               ].join(" ")}
             >
-              <div className="font-medium">{mod.shortName}</div>
-              <div className="text-[11px] opacity-70">{mod.comingSoon ? "Coming soon" : mod.author}</div>
+              <div className="truncate text-sm font-medium">{mod.shortName}</div>
+              <div className="truncate text-[11px] opacity-70">
+                {mod.comingSoon ? "Coming soon" : mod.author}
+              </div>
             </button>
           );
         })}
       </div>
 
-      <div className="scrollbar-thin flex-1 space-y-3 overflow-y-auto pr-1">
+      {/* Form — no scrolling; denser single-page layout */}
+      <div className="mt-3 flex min-h-0 flex-1 flex-col gap-2.5 overflow-hidden">
         <Field label="Version">
-          <select
-            className="w-full rounded-xl border border-line bg-panel-2 px-3 py-2.5 text-sm text-white outline-none transition focus:border-purple/60"
+          <VersionSelect
+            releases={releases}
             value={selectedTag}
-            disabled={!releases.length || busy}
-            onChange={(e) => onSelectTag(e.target.value)}
-          >
-            {!releases.length && <option value="">Loading releases...</option>}
-            {releases.map((r) => (
-              <option key={r.tagName} value={r.tagName}>
-                {r.tagName}
-                {channels.latest?.tagName === r.tagName ? " · Latest" : ""}
-                {!r.prerelease && channels.stable?.tagName === r.tagName ? " · Stable" : ""}
-                {r.prerelease ? " · Beta" : ""}
-              </option>
-            ))}
-          </select>
+            disabled={busy}
+            onChange={onSelectTag}
+          />
         </Field>
 
-        <Field label="Among Us folder">
-          <PathBox
-            value={game?.path || "Not found"}
-            ok={Boolean(game?.found)}
-            hint={game?.message}
-          />
+        <Field label="Among Us install">
+          <div
+            className={[
+              "rounded-xl border bg-panel-2 px-3 py-2",
+              game?.found ? (game.canInstall ? "border-line" : "border-amber-500/40") : "border-red/40",
+            ].join(" ")}
+          >
+            <div className="flex flex-wrap items-center gap-1.5">
+              <MetaChip
+                text={game?.platformLabel || "Not detected"}
+                tone={game?.found ? "purple" : "muted"}
+              />
+              {game?.found && <MetaChip text={versionLabel} tone={game.canInstall ? "green" : "amber"} />}
+              {game?.branch && game.branch !== "public" && (
+                <MetaChip text={`branch: ${game.branch}`} tone="muted" />
+              )}
+              {game?.assetHint && game.found && (
+                <MetaChip text={game.assetHint} tone="muted" />
+              )}
+            </div>
+            <div
+              className={[
+                "mt-1.5 truncate text-[13px]",
+                game?.found ? "text-white/90" : "text-red",
+              ].join(" ")}
+              title={game?.path || "Not found"}
+            >
+              {game?.path || "Not found"}
+            </div>
+          </div>
         </Field>
 
         <Field label="Install location">
-          <PathBox
-            value={installLocation ? `${installLocation}\\${selectedMod?.folderName ?? ""}` : "Next to launcher"}
-            ok
-            hint="Default: same folder as the launcher executable"
-          />
+          <div className="flex items-stretch gap-2">
+            <div className="min-w-0 flex-1">
+              <PathBox value={installTarget} tone="neutral" />
+            </div>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={onBrowseInstallLocation}
+              className="shrink-0 rounded-xl border border-line bg-panel-2 px-3.5 text-sm font-medium text-white/90 transition hover:border-purple/50 hover:bg-purple/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+              title="Choose a different parent folder"
+            >
+              Browse
+            </button>
+          </div>
+          <p className="mt-1 text-[11px] text-muted">
+            Defaults next to the launcher. Browse to change the parent folder.
+          </p>
         </Field>
 
-        <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-line bg-panel-2 px-3 py-3 text-sm transition hover:border-white/15">
-          <input
-            type="checkbox"
-            className="accent-purple"
+        <div className="grid grid-cols-2 gap-2">
+          <ToggleChip
             checked={createShortcut}
             disabled={busy}
-            onChange={(e) => onToggleShortcut(e.target.checked)}
+            onChange={onToggleShortcut}
+            label="Desktop shortcut"
           />
-          <span>Create desktop shortcut</span>
-        </label>
-
-        <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-line bg-panel-2 px-3 py-3 text-sm transition hover:border-white/15">
-          <input
-            type="checkbox"
-            className="accent-purple"
+          <ToggleChip
             checked={launchAfter}
             disabled={busy}
-            onChange={(e) => onToggleLaunch(e.target.checked)}
+            onChange={onToggleLaunch}
+            label="Launch after install"
           />
-          <span>Launch after install</span>
-        </label>
-
-        <div className="rounded-xl border border-line bg-black/20 px-3 py-3">
-          <div className="mb-1 text-xs uppercase tracking-wide text-muted">Status</div>
-          <div className="text-sm text-white/90">
-            {error ? (
-              <span className="text-red">{error}</span>
-            ) : busy && progress ? (
-              progress.message
-            ) : installed ? (
-              "Ready to play"
-            ) : (
-              game?.message ?? "Checking..."
-            )}
-          </div>
-          {(busy || (progress && !progress.done)) && progress && (
-            <div className="mt-3">
-              <ProgressBar percent={progress.percent} message={progress.message} stage={progress.stage} />
-            </div>
-          )}
         </div>
       </div>
 
-      <div className="mt-4 flex gap-2">
-        {installed ? (
-          <ActionButton onClick={onPlay} disabled={busy} variant="play">
-            Play
-          </ActionButton>
-        ) : (
-          <ActionButton onClick={onInstall} disabled={!canInstall} variant="install">
-            {busy ? "Installing..." : "Install"}
-          </ActionButton>
-        )}
-        {installed && (
-          <ActionButton onClick={onInstall} disabled={!canInstall && !installed} variant="secondary">
-            Reinstall
-          </ActionButton>
-        )}
+      {/* CTA footer — always visible */}
+      <div className="mt-3 shrink-0 space-y-2.5 border-t border-white/5 pt-3">
+        <div className="rounded-xl border border-line/80 bg-black/25 px-3 py-2.5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-[10px] font-medium uppercase tracking-wide text-muted">Status</div>
+              <div
+                className={[
+                  "text-sm leading-snug",
+                  statusTone === "bad"
+                    ? "text-red"
+                    : statusTone === "warn"
+                      ? "text-amber-300"
+                      : "text-white/90",
+                ].join(" ")}
+                title={statusText}
+              >
+                {statusText}
+              </div>
+            </div>
+            {!busy && !installed && statusTone === "ok" && (
+              <span className="shrink-0 rounded-md bg-emerald-500/15 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-300">
+                Ready
+              </span>
+            )}
+            {!busy && !installed && statusTone === "warn" && (
+              <span className="shrink-0 rounded-md bg-amber-500/15 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-amber-300">
+                Check
+              </span>
+            )}
+            {!busy && !installed && statusTone === "bad" && game?.found && (
+              <span className="shrink-0 rounded-md bg-red/15 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-red">
+                Blocked
+              </span>
+            )}
+          </div>
+          {busy && progress && (
+            <div className="mt-2.5">
+              <ProgressBar percent={progress.percent} message="" stage={progress.stage} />
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-2">
+          {installed ? (
+            <ActionButton onClick={onPlay} disabled={busy} variant="play">
+              Play
+            </ActionButton>
+          ) : (
+            <ActionButton onClick={onInstall} disabled={!canInstall} variant="install">
+              {busy ? "Installing..." : "Install"}
+            </ActionButton>
+          )}
+          {installed && (
+            <ActionButton onClick={onInstall} disabled={busy} variant="secondary">
+              Reinstall
+            </ActionButton>
+          )}
+        </div>
       </div>
     </section>
   );
@@ -204,23 +285,92 @@ export function InstallPanel(props: Props) {
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <label className="block space-y-1.5">
-      <span className="text-xs font-medium uppercase tracking-wide text-muted">{label}</span>
+    <div className="shrink-0 space-y-1">
+      <span className="text-[10px] font-medium uppercase tracking-wide text-muted">{label}</span>
       {children}
-    </label>
+    </div>
   );
 }
 
-function PathBox({ value, ok, hint }: { value: string; ok?: boolean; hint?: string }) {
+function PathBox({
+  value,
+  tone = "neutral",
+}: {
+  value: string;
+  tone?: "neutral" | "danger";
+}) {
   return (
-    <div className="rounded-xl border border-line bg-panel-2 px-3 py-2.5">
-      <div className="truncate text-sm text-white/90" title={value}>
+    <div
+      className={[
+        "rounded-xl border bg-panel-2 px-3 py-2",
+        tone === "danger" ? "border-red/40" : "border-line",
+      ].join(" ")}
+    >
+      <div
+        className={[
+          "truncate text-[13px]",
+          tone === "danger" ? "text-red" : "text-white/90",
+        ].join(" ")}
+        title={value}
+      >
         {value}
       </div>
-      {hint && (
-        <div className={`mt-1 text-[11px] ${ok ? "text-muted" : "text-red"}`}>{hint}</div>
-      )}
     </div>
+  );
+}
+
+function MetaChip({
+  text,
+  tone,
+}: {
+  text: string;
+  tone: "purple" | "green" | "amber" | "muted";
+}) {
+  const styles =
+    tone === "purple"
+      ? "bg-purple/20 text-purple"
+      : tone === "green"
+        ? "bg-emerald-500/15 text-emerald-300"
+        : tone === "amber"
+          ? "bg-amber-500/15 text-amber-300"
+          : "bg-white/5 text-muted";
+  return (
+    <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${styles}`}>
+      {text}
+    </span>
+  );
+}
+
+function ToggleChip({
+  checked,
+  disabled,
+  onChange,
+  label,
+}: {
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (v: boolean) => void;
+  label: string;
+}) {
+  return (
+    <label
+      className={[
+        "flex cursor-pointer items-center gap-2.5 rounded-xl border px-3 py-2.5 text-[13px] transition",
+        checked
+          ? "border-purple/40 bg-purple/10 text-white"
+          : "border-line bg-panel-2 text-muted hover:border-white/15 hover:text-white",
+        disabled ? "cursor-not-allowed opacity-50" : "",
+      ].join(" ")}
+    >
+      <input
+        type="checkbox"
+        className="accent-purple"
+        checked={checked}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+      <span className="leading-tight">{label}</span>
+    </label>
   );
 }
 

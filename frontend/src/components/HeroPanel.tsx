@@ -10,7 +10,7 @@ export function HeroPanel({ mod }: Props) {
   const to = mod?.accentTo ?? "#ef4444";
 
   return (
-    <section className="relative flex h-full flex-col overflow-hidden rounded-2xl border border-white/10 bg-panel">
+    <section className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-white/10 bg-panel">
       <div
         className="absolute inset-0 opacity-90"
         style={{

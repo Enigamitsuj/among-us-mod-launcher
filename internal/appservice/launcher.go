@@ -11,11 +11,11 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 
 	"github.com/Enigamitsuj/among-us-mod-launcher/internal/fsutil"
+	"github.com/Enigamitsuj/among-us-mod-launcher/internal/game"
 	githubapi "github.com/Enigamitsuj/among-us-mod-launcher/internal/githubapi"
 	"github.com/Enigamitsuj/among-us-mod-launcher/internal/installer"
 	"github.com/Enigamitsuj/among-us-mod-launcher/internal/mods"
 	"github.com/Enigamitsuj/among-us-mod-launcher/internal/shortcut"
-	"github.com/Enigamitsuj/among-us-mod-launcher/internal/steam"
 )
 
 // Launcher is the Wails-bound service the frontend talks to.
@@ -25,6 +25,7 @@ type Launcher struct {
 	installer  *installer.Service
 	window     *application.WebviewWindow
 	installing bool
+	lastDetect mods.GameStatus
 }
 
 func New() *Launcher {
@@ -51,33 +52,43 @@ func (l *Launcher) GetDefaultInstallLocation() (string, error) {
 	return fsutil.DefaultInstallRoot()
 }
 
+// PickInstallDirectory opens a native folder picker. Empty string means cancelled.
+func (l *Launcher) PickInstallDirectory(current string) (string, error) {
+	app := application.Get()
+	if app == nil {
+		return "", errors.New("application is not ready")
+	}
+
+	dialog := app.Dialog.OpenFile().
+		SetTitle("Choose install folder").
+		SetButtonText("Select Folder").
+		CanChooseFiles(false).
+		CanChooseDirectories(true).
+		CanCreateDirectories(true)
+
+	if current != "" {
+		dialog.SetDirectory(current)
+	} else if root, err := fsutil.DefaultInstallRoot(); err == nil {
+		dialog.SetDirectory(root)
+	}
+
+	if l.window != nil {
+		dialog.AttachToWindow(l.window)
+	}
+
+	selected, err := dialog.PromptForSingleSelection()
+	if err != nil {
+		return "", errors.New("could not open folder picker")
+	}
+	return selected, nil
+}
+
 func (l *Launcher) DetectGame() mods.GameStatus {
-	status := mods.GameStatus{
-		Supported: true,
-		Message:   "Ready to install",
-	}
-
-	steamInstall, err := steam.DetectSteam()
-	if err != nil {
-		status.Message = "Steam not installed."
-		return status
-	}
-	status.SteamFound = true
-	status.SteamPath = steamInstall.Path
-
-	gamePath, err := steam.FindAmongUs()
-	if err != nil {
-		status.Message = "Among Us not found."
-		return status
-	}
-
-	status.Found = true
-	status.Path = gamePath
-	status.Version = steam.ReadGameVersion(gamePath)
-	status.Running = steam.IsGameRunning()
-	if status.Running {
-		status.Message = "Game is currently running. Close Among Us before installing."
-	}
+	d := game.Detect()
+	status := toGameStatus(d)
+	l.mu.Lock()
+	l.lastDetect = status
+	l.mu.Unlock()
 	return status
 }
 
@@ -89,7 +100,46 @@ func (l *Launcher) GetReleases(modID string) ([]mods.Release, error) {
 	if !mod.Enabled {
 		return nil, errors.New("this mod is coming soon")
 	}
-	return l.github.ListReleases(mod.GitHubOwner, mod.GitHubRepo, 20)
+
+	platform := game.PlatformUnknown
+	l.mu.Lock()
+	if l.lastDetect.Found && l.lastDetect.Platform != "" {
+		platform = game.Platform(l.lastDetect.Platform)
+	}
+	l.mu.Unlock()
+
+	// Refresh detection if we have no platform yet.
+	var gameVersion string
+	l.mu.Lock()
+	gameVersion = l.lastDetect.Version
+	l.mu.Unlock()
+
+	if platform == game.PlatformUnknown || platform == "" {
+		status := l.DetectGame()
+		platform = game.Platform(status.Platform)
+		gameVersion = status.Version
+	}
+
+	releases, err := l.github.ListReleases(mod.GitHubOwner, mod.GitHubRepo, platform, 20)
+	if err != nil {
+		return nil, err
+	}
+
+	for i := range releases {
+		recommended := mod.IsRecommendedTag(releases[i].TagName)
+		compat := game.EvaluateRelease(
+			platform,
+			gameVersion,
+			releases[i].AssetMatched,
+			recommended,
+			mod.RequiredGameVersion,
+		)
+		releases[i].CompatLevel = compat.Level
+		releases[i].CompatReason = compat.Reason
+		releases[i].Installable = compat.Installable
+		releases[i].Recommended = recommended
+	}
+	return releases, nil
 }
 
 func (l *Launcher) GetInstallState(modID, installLocation string) mods.InstallState {
@@ -138,40 +188,67 @@ func (l *Launcher) Install(opts mods.InstallOptions) error {
 		return errors.New("this mod is not available")
 	}
 
-	releases, err := l.github.ListReleases(mod.GitHubOwner, mod.GitHubRepo, 30)
+	status := l.DetectGame()
+	if !status.Found {
+		l.finishInstall()
+		return errors.New("Among Us not found.")
+	}
+	if status.Running {
+		l.finishInstall()
+		return errors.New("Game is currently running.")
+	}
+	if !status.CanInstall {
+		l.finishInstall()
+		if status.Message != "" {
+			return errors.New(status.Message)
+		}
+		return errors.New("Unsupported version.")
+	}
+
+	platform := game.Platform(status.Platform)
+	if opts.Platform != "" {
+		platform = game.Platform(opts.Platform)
+	}
+	if opts.AmongUsPath == "" {
+		opts.AmongUsPath = status.Path
+	}
+	opts.Platform = string(platform)
+
+	releases, err := l.github.ListReleases(mod.GitHubOwner, mod.GitHubRepo, platform, 30)
 	if err != nil {
 		l.finishInstall()
 		return errors.New("GitHub unavailable.")
 	}
 
-	downloadURL := ""
-	for _, r := range releases {
-		if r.TagName == opts.VersionTag {
-			downloadURL = r.DownloadURL
+	var selected *mods.Release
+	for i := range releases {
+		if releases[i].TagName == opts.VersionTag {
+			selected = &releases[i]
 			break
 		}
 	}
-	if downloadURL == "" && len(releases) > 0 && opts.VersionTag == "" {
-		downloadURL = releases[0].DownloadURL
+	if selected == nil && len(releases) > 0 && opts.VersionTag == "" {
+		selected = &releases[0]
 		opts.VersionTag = releases[0].TagName
 	}
-	if downloadURL == "" {
+	if selected == nil {
 		l.finishInstall()
 		return errors.New("selected version was not found")
 	}
 
-	if opts.AmongUsPath == "" {
-		path, err := steam.FindAmongUs()
-		if err != nil {
-			l.finishInstall()
-			return errors.New("Among Us not found.")
-		}
-		opts.AmongUsPath = path
-	}
-
-	if steam.IsGameRunning() {
+	compat := game.EvaluateRelease(
+		platform,
+		status.Version,
+		selected.AssetMatched,
+		mod.IsRecommendedTag(selected.TagName),
+		mod.RequiredGameVersion,
+	)
+	if !compat.Installable {
 		l.finishInstall()
-		return errors.New("Game is currently running.")
+		if compat.Reason != "" {
+			return errors.New(compat.Reason)
+		}
+		return errors.New("This version is not compatible with your Among Us install.")
 	}
 
 	if l.installer.DestinationExists(opts.InstallLocation, mod.FolderName) && !opts.ForceReinstall {
@@ -179,6 +256,7 @@ func (l *Launcher) Install(opts mods.InstallOptions) error {
 		return installer.ErrAlreadyExists
 	}
 
+	downloadURL := selected.DownloadURL
 	go func() {
 		defer l.finishInstall()
 		app := application.Get()
@@ -200,9 +278,15 @@ func (l *Launcher) Install(opts mods.InstallOptions) error {
 		}
 
 		if opts.CreateShortcut {
+			target := filepath.Join(dest, "Among Us.exe")
+			if platform == game.PlatformEpic {
+				if starter := filepath.Join(dest, "EpicGamesStarter.exe"); fileExists(starter) {
+					target = starter
+				}
+			}
 			_ = shortcut.CreateDesktopShortcut(
 				mod.FolderName,
-				filepath.Join(dest, "Among Us.exe"),
+				target,
 				filepath.Join(opts.AmongUsPath, "Among Us.exe"),
 				dest,
 			)
@@ -217,11 +301,17 @@ func (l *Launcher) Install(opts mods.InstallOptions) error {
 }
 
 func (l *Launcher) LaunchMod(installPath string) error {
+	// Prefer Epic starter when present.
+	starter := filepath.Join(installPath, "EpicGamesStarter.exe")
 	exe := filepath.Join(installPath, "Among Us.exe")
-	if !fileExists(exe) {
+	target := exe
+	if fileExists(starter) {
+		target = starter
+	}
+	if !fileExists(target) {
 		return errors.New("installation not found")
 	}
-	cmd := exec.Command(exe)
+	cmd := exec.Command(target)
 	cmd.Dir = installPath
 	return cmd.Start()
 }
@@ -244,6 +334,53 @@ func (l *Launcher) finishInstall() {
 	l.mu.Unlock()
 }
 
+func toGameStatus(d game.Detection) mods.GameStatus {
+	status := mods.GameStatus{
+		Found:      d.Found,
+		Running:    d.Running,
+		Message:    d.Message,
+		SteamFound: d.SteamFound,
+		SteamPath:  d.SteamPath,
+		EpicFound:  d.EpicFound,
+		ItchFound:  d.ItchFound,
+		XboxFound:  d.XboxFound,
+	}
+	if !d.Found {
+		status.Supported = false
+		status.CanInstall = false
+		return status
+	}
+
+	p := d.Primary
+	status.Path = p.Path
+	status.Version = p.Version
+	status.Platform = string(p.Platform)
+	status.PlatformLabel = p.Platform.DisplayName()
+	status.BuildID = p.BuildID
+	status.Branch = p.Branch
+	status.Supported = p.Supported
+	status.CanInstall = p.CanInstall
+	status.AssetHint = p.AssetHint
+	status.Message = d.Message
+
+	status.Installs = make([]mods.GameInstall, 0, len(d.Installs))
+	for _, inst := range d.Installs {
+		status.Installs = append(status.Installs, mods.GameInstall{
+			Platform:   string(inst.Platform),
+			Path:       inst.Path,
+			Version:    inst.Version,
+			BuildID:    inst.BuildID,
+			Branch:     inst.Branch,
+			Supported:  inst.Supported,
+			CanInstall: inst.CanInstall,
+			AssetHint:  inst.AssetHint,
+			Message:    inst.Message,
+			LaunchHint: inst.LaunchHint,
+		})
+	}
+	return status
+}
+
 func friendlyError(err error) string {
 	if err == nil {
 		return ""
@@ -255,12 +392,12 @@ func friendlyError(err error) string {
 	switch {
 	case strings.Contains(msg, "Among Us not found"):
 		return "Among Us not found."
-	case strings.Contains(msg, "Steam"):
-		return "Steam not installed."
 	case strings.Contains(msg, "GitHub"):
 		return "GitHub unavailable."
 	case strings.Contains(msg, "running"):
 		return "Game is currently running."
+	case strings.Contains(msg, "Unsupported") || strings.Contains(msg, "downgrade"):
+		return msg
 	default:
 		return msg
 	}
