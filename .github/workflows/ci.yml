@@ -35,6 +35,15 @@ jobs:
       - name: Install Wails v3 CLI
         run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-alpha2.117
 
+      # go:embed requires frontend/dist to exist before vet/test on a clean checkout.
+      - name: Ensure frontend embed assets
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path frontend/dist | Out-Null
+          if (-not (Test-Path frontend/dist/index.html)) {
+            Set-Content -Path frontend/dist/index.html -Value '<!DOCTYPE html><html><body></body></html>'
+          }
+
       - name: Vet Go
         run: go vet ./...
 
