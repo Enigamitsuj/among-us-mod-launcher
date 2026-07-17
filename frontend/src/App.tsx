@@ -49,6 +49,8 @@ function App() {
       return;
     }
     try {
+      // Ensure detection runs first so the correct storefront ZIP is chosen.
+      await Launcher.DetectGame();
       const list = (await Launcher.GetReleases(mod.id)) ?? [];
       setReleases(list);
       setSelectedTag(list[0]?.tagName ?? "");
@@ -136,6 +138,7 @@ function App() {
         modId: selectedMod.id,
         versionTag: selectedTag,
         amongUsPath: game?.path ?? "",
+        platform: game?.platform ?? "",
         installLocation,
         createShortcut,
         launchAfterInstall: launchAfter,
@@ -177,10 +180,23 @@ function App() {
     }
   };
 
+  const onBrowseInstallLocation = async () => {
+    try {
+      const picked = await Launcher.PickInstallDirectory(installLocation);
+      if (!picked) return;
+      setInstallLocation(picked);
+      if (selectedMod) {
+        await refreshInstallState(selectedMod.id, picked);
+      }
+    } catch {
+      setError("Could not open folder picker.");
+    }
+  };
+
   return (
-    <div className="relative flex h-full flex-col bg-ink text-text">
+    <div className="relative flex h-full min-h-0 flex-col bg-ink text-text">
       <TitleBar />
-      <main className="grid flex-1 grid-cols-[1.05fr_0.95fr] gap-4 p-4">
+      <main className="grid min-h-0 flex-1 grid-cols-[1.05fr_0.95fr] gap-4 overflow-hidden p-4">
         <HeroPanel mod={selectedMod} />
         <InstallPanel
           mods={mods}
@@ -195,6 +211,7 @@ function App() {
           launchAfter={launchAfter}
           onToggleShortcut={setCreateShortcut}
           onToggleLaunch={setLaunchAfter}
+          onBrowseInstallLocation={() => void onBrowseInstallLocation()}
           installState={installState}
           progress={progress}
           busy={busy}

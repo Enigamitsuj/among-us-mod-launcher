@@ -65,3 +65,12 @@ textarea {
 .scrollbar-thin::-webkit-scrollbar-track {
   background: transparent;
 }
+
+/* Prefer no page scrollbars in the fixed launcher chrome */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}

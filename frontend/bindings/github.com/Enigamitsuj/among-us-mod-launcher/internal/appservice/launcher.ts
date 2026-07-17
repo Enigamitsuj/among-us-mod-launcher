@@ -65,6 +65,13 @@ export function MinimizeWindow(): $CancellablePromise<void> {
 }
 
 /**
+ * PickInstallDirectory opens a native folder picker. Empty string means cancelled.
+ */
+export function PickInstallDirectory(current: string): $CancellablePromise<string> {
+    return $Call.ByID(3243511614, current);
+}
+
+/**
  * SetWindow stores the main window handle for minimize/close.
  */
 export function SetWindow(w: application$0.WebviewWindow | null): $CancellablePromise<void> {

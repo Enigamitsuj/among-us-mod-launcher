@@ -22,6 +22,9 @@ func init() {
 			AccentTo:    "#ef4444",
 			Enabled:     true,
 			ComingSoon:  false,
+
+			RequiredGameVersion: "17.3",
+			RecommendedTags:     []string{"1.6.2", "1.6.3-beta2"},
 		},
 		{
 			ID:          "better-crewlink",
