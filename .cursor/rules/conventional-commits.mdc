@@ -1,0 +1,30 @@
+---
+description: Require Conventional Commits for repository history
+alwaysApply: true
+---
+
+# Conventional Commits
+
+Use Conventional Commits for every commit:
+
+`<type>(optional-scope): <imperative summary>`
+
+Allowed common types:
+
+- `feat`: user-facing functionality
+- `fix`: bug fixes
+- `docs`: documentation only
+- `test`: tests only
+- `refactor`: behavior-preserving code changes
+- `build`: build system or dependencies
+- `ci`: CI/CD workflows
+- `chore`: maintenance not covered above
+
+Keep the subject concise, lowercase after the colon, and without a trailing period.
+Use `!` and a `BREAKING CHANGE:` footer when applicable.
+
+Examples:
+
+- `feat(installer): add atomic mod updates`
+- `fix(ci): create embed assets before vet`
+- `docs: clarify unsigned release installation`
