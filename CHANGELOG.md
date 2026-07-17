@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Unified publisher branding to Enigamitsuj across app metadata and docs
 - Documented SmartScreen guidance and SHA256 verification for unsigned Windows releases
 - CI now runs `go test ./...`
+- Detect protected install folders early and surface a clear Program Files / UAC message
+- Make icon rebuild script portable; keep committed icon assets as the build source of truth
 
 ## [1.0.0] - TBD
 

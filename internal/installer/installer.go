@@ -2,6 +2,7 @@ package installer
 
 import (
 	"archive/zip"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -71,6 +72,10 @@ func (s *Service) Install(opts mods.InstallOptions, mod mods.Mod, downloadURL st
 	staging := dest + stagingSuffix
 	backup := dest + backupSuffix
 
+	if !fsutil.DirIsWritable(destRoot) {
+		return "", ErrProtectedInstallFolder
+	}
+
 	if fsutil.DirExists(dest) && !opts.ForceReinstall {
 		return "", ErrAlreadyExists
 	}
@@ -103,6 +108,9 @@ func (s *Service) Install(opts mods.InstallOptions, mod mods.Mod, downloadURL st
 	emit("installing", "Preparing new installation...", 70, false, "", dest)
 	if err := copyDir(opts.AmongUsPath, staging); err != nil {
 		_ = os.RemoveAll(staging)
+		if isPermissionError(err) {
+			return "", ErrProtectedInstallFolder
+		}
 		return "", fmt.Errorf("failed to copy Among Us files")
 	}
 
@@ -338,4 +346,17 @@ func copyFile(src, dest string, mode os.FileMode) error {
 func fileExists(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && !info.IsDir()
+}
+
+func isPermissionError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, os.ErrPermission) {
+		return true
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "access is denied") ||
+		strings.Contains(msg, "permission denied") ||
+		strings.Contains(msg, "denied")
 }

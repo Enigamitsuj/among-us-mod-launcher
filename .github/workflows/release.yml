@@ -32,6 +32,12 @@ jobs:
       - name: Install Wails v3 CLI
         run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-alpha2.117
 
+      - name: Vet Go
+        run: go vet ./...
+
+      - name: Test Go
+        run: go test ./...
+
       - name: Set executable version metadata
         shell: pwsh
         run: |

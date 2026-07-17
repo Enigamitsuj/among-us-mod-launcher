@@ -359,6 +359,9 @@ func friendlyError(err error) string {
 	if errors.Is(err, installer.ErrAlreadyExists) {
 		return "Town of Us already exists."
 	}
+	if errors.Is(err, installer.ErrProtectedInstallFolder) {
+		return installer.ErrProtectedInstallFolder.Error() + "."
+	}
 	msg := err.Error()
 	switch {
 	case strings.Contains(msg, "Among Us not found"):

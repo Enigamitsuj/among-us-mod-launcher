@@ -45,6 +45,7 @@ This should feel like an indie-studio launcher, not a bare zip installer:
 - Zero configuration for most users
 - Original Among Us install is **never** modified
 - Mods install **beside** the detected game in a separate folder (for example `Among Us - TOU Mira`)
+- If the game lives under a protected folder such as Program Files, move it to a user library folder or run the launcher as administrator
 
 Maintained by **Enigamitsuj**.
 

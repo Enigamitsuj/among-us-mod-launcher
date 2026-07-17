@@ -1,6 +1,11 @@
 package game
 
-import "sort"
+import (
+	"path/filepath"
+	"sort"
+
+	"github.com/Enigamitsuj/among-us-mod-launcher/internal/fsutil"
+)
 
 // Detect scans Steam, Epic, Itch, and Xbox for Among Us installs.
 func Detect() Detection {
@@ -24,6 +29,10 @@ func Detect() Detection {
 	all = append(all, itchInstalls...)
 	all = append(all, epicInstalls...)
 	all = append(all, xboxInstalls...)
+
+	for i := range all {
+		applyInstallWritability(&all[i])
+	}
 
 	d.Running = IsRunning()
 	if len(all) == 0 {
@@ -53,4 +62,16 @@ func Detect() Detection {
 	}
 	d.Message = d.Primary.Message
 	return d
+}
+
+func applyInstallWritability(inst *Install) {
+	if inst == nil || !inst.CanInstall || inst.Path == "" {
+		return
+	}
+	parent := filepath.Dir(filepath.Clean(inst.Path))
+	if fsutil.DirIsWritable(parent) {
+		return
+	}
+	inst.CanInstall = false
+	inst.Message = "Among Us is in a protected folder (often Program Files). Move the game to a user library folder, or run the launcher as administrator."
 }

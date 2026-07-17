@@ -20,3 +20,24 @@ func DirExists(path string) bool {
 func EnsureDir(path string) error {
 	return os.MkdirAll(path, 0o755)
 }
+
+// DirIsWritable reports whether a new file can be created in dir.
+// Used to detect UAC-protected game folders such as Program Files.
+func DirIsWritable(dir string) bool {
+	if dir == "" {
+		return false
+	}
+	info, err := os.Stat(dir)
+	if err != nil || !info.IsDir() {
+		return false
+	}
+
+	f, err := os.CreateTemp(dir, ".aumod-write-*")
+	if err != nil {
+		return false
+	}
+	name := f.Name()
+	_ = f.Close()
+	_ = os.Remove(name)
+	return true
+}
