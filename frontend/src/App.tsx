@@ -197,7 +197,10 @@ function App() {
     <div className="relative flex h-full min-h-0 flex-col bg-ink text-text">
       <TitleBar />
       <main className="grid min-h-0 flex-1 grid-cols-[1.05fr_0.95fr] gap-4 overflow-hidden p-4">
-        <HeroPanel mod={selectedMod} />
+        <HeroPanel
+          mod={selectedMod}
+          release={releases.find((r) => r.tagName === selectedTag) ?? null}
+        />
         <InstallPanel
           mods={mods}
           selectedMod={selectedMod}
