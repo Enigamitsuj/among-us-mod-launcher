@@ -14,8 +14,8 @@ import (
 	"github.com/Enigamitsuj/among-us-mod-launcher/internal/game"
 	githubapi "github.com/Enigamitsuj/among-us-mod-launcher/internal/githubapi"
 	"github.com/Enigamitsuj/among-us-mod-launcher/internal/installer"
+	"github.com/Enigamitsuj/among-us-mod-launcher/internal/installrecord"
 	"github.com/Enigamitsuj/among-us-mod-launcher/internal/mods"
-	"github.com/Enigamitsuj/among-us-mod-launcher/internal/shortcut"
 )
 
 // Launcher is the Wails-bound service the frontend talks to.
@@ -48,41 +48,6 @@ func (l *Launcher) GetDefaultMod() mods.Mod {
 	return mods.Default()
 }
 
-func (l *Launcher) GetDefaultInstallLocation() (string, error) {
-	return fsutil.DefaultInstallRoot()
-}
-
-// PickInstallDirectory opens a native folder picker. Empty string means cancelled.
-func (l *Launcher) PickInstallDirectory(current string) (string, error) {
-	app := application.Get()
-	if app == nil {
-		return "", errors.New("application is not ready")
-	}
-
-	dialog := app.Dialog.OpenFile().
-		SetTitle("Choose install folder").
-		SetButtonText("Select Folder").
-		CanChooseFiles(false).
-		CanChooseDirectories(true).
-		CanCreateDirectories(true)
-
-	if current != "" {
-		dialog.SetDirectory(current)
-	} else if root, err := fsutil.DefaultInstallRoot(); err == nil {
-		dialog.SetDirectory(root)
-	}
-
-	if l.window != nil {
-		dialog.AttachToWindow(l.window)
-	}
-
-	selected, err := dialog.PromptForSingleSelection()
-	if err != nil {
-		return "", errors.New("could not open folder picker")
-	}
-	return selected, nil
-}
-
 func (l *Launcher) DetectGame() mods.GameStatus {
 	d := game.Detect()
 	status := toGameStatus(d)
@@ -90,6 +55,10 @@ func (l *Launcher) DetectGame() mods.GameStatus {
 	l.lastDetect = status
 	l.mu.Unlock()
 	return status
+}
+
+func (l *Launcher) IsGameRunning() bool {
+	return game.IsRunning()
 }
 
 func (l *Launcher) GetReleases(modID string) ([]mods.Release, error) {
@@ -142,34 +111,36 @@ func (l *Launcher) GetReleases(modID string) ([]mods.Release, error) {
 	return releases, nil
 }
 
-func (l *Launcher) GetInstallState(modID, installLocation string) mods.InstallState {
+func (l *Launcher) GetInstallState(modID, amongUsPath string) mods.InstallState {
 	mod, ok := mods.Get(modID)
-	if !ok {
+	if !ok || amongUsPath == "" {
 		return mods.InstallState{}
 	}
-	if installLocation == "" {
-		installLocation, _ = fsutil.DefaultInstallRoot()
-	}
-	path := fsutil.JoinInstallPath(installLocation, mod.FolderName)
+	path := fsutil.JoinInstallPath(filepath.Dir(filepath.Clean(amongUsPath)), mod.FolderName)
 	exists := fsutil.DirExists(path)
 	exe := filepath.Join(path, "Among Us.exe")
 	installed := exists && fileExists(exe)
+	version := ""
+	managed := false
+	if record, ok := installrecord.Load(path); ok && record.ModID == modID {
+		version = record.Version
+		managed = true
+	}
 	return mods.InstallState{
 		Installed: installed,
 		Exists:    exists,
 		Path:      path,
+		Version:   version,
+		Managed:   managed,
 	}
 }
 
-func (l *Launcher) DestinationExists(modID, installLocation string) bool {
+func (l *Launcher) DestinationExists(modID, amongUsPath string) bool {
 	mod, ok := mods.Get(modID)
-	if !ok {
+	if !ok || amongUsPath == "" {
 		return false
 	}
-	if installLocation == "" {
-		installLocation, _ = fsutil.DefaultInstallRoot()
-	}
-	return l.installer.DestinationExists(installLocation, mod.FolderName)
+	return l.installer.DestinationExists(filepath.Dir(filepath.Clean(amongUsPath)), mod.FolderName)
 }
 
 // Install starts a background install and emits "install:progress" events.
@@ -206,12 +177,7 @@ func (l *Launcher) Install(opts mods.InstallOptions) error {
 	}
 
 	platform := game.Platform(status.Platform)
-	if opts.Platform != "" {
-		platform = game.Platform(opts.Platform)
-	}
-	if opts.AmongUsPath == "" {
-		opts.AmongUsPath = status.Path
-	}
+	opts.AmongUsPath = status.Path
 	opts.Platform = string(platform)
 
 	releases, err := l.github.ListReleases(mod.GitHubOwner, mod.GitHubRepo, platform, 30)
@@ -251,7 +217,8 @@ func (l *Launcher) Install(opts mods.InstallOptions) error {
 		return errors.New("This version is not compatible with your Among Us install.")
 	}
 
-	if l.installer.DestinationExists(opts.InstallLocation, mod.FolderName) && !opts.ForceReinstall {
+	installRoot := filepath.Dir(filepath.Clean(opts.AmongUsPath))
+	if l.installer.DestinationExists(installRoot, mod.FolderName) && !opts.ForceReinstall {
 		l.finishInstall()
 		return installer.ErrAlreadyExists
 	}
@@ -260,7 +227,7 @@ func (l *Launcher) Install(opts mods.InstallOptions) error {
 	go func() {
 		defer l.finishInstall()
 		app := application.Get()
-		dest, err := l.installer.Install(opts, mod, downloadURL, func(p mods.InstallProgress) {
+		_, err := l.installer.Install(opts, mod, downloadURL, func(p mods.InstallProgress) {
 			if app != nil {
 				app.Event.Emit("install:progress", p)
 			}
@@ -276,27 +243,31 @@ func (l *Launcher) Install(opts mods.InstallOptions) error {
 			}
 			return
 		}
-
-		if opts.CreateShortcut {
-			target := filepath.Join(dest, "Among Us.exe")
-			if platform == game.PlatformEpic {
-				if starter := filepath.Join(dest, "EpicGamesStarter.exe"); fileExists(starter) {
-					target = starter
-				}
-			}
-			_ = shortcut.CreateDesktopShortcut(
-				mod.FolderName,
-				target,
-				filepath.Join(opts.AmongUsPath, "Among Us.exe"),
-				dest,
-			)
-		}
-
-		if opts.LaunchAfterInstall {
-			_ = l.LaunchMod(dest)
-		}
 	}()
 
+	return nil
+}
+
+func (l *Launcher) Uninstall(modID, amongUsPath string) error {
+	mod, ok := mods.Get(modID)
+	if !ok || amongUsPath == "" {
+		return errors.New("installation not found")
+	}
+	if game.IsRunning() {
+		return errors.New("Game is currently running.")
+	}
+
+	path := fsutil.JoinInstallPath(filepath.Dir(filepath.Clean(amongUsPath)), mod.FolderName)
+	if !fsutil.DirExists(path) {
+		return nil
+	}
+	record, managed := installrecord.Load(path)
+	if !managed || record.ModID != modID {
+		return errors.New("This folder was not created by the launcher, so it was not removed.")
+	}
+	if err := os.RemoveAll(path); err != nil {
+		return errors.New("could not remove the mod installation")
+	}
 	return nil
 }
 

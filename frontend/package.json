@@ -1,7 +1,7 @@
 {
   "name": "among-us-mod-launcher",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -20,6 +20,7 @@
     "@types/react": "^18.3.23",
     "@types/react-dom": "^18.3.7",
     "@vitejs/plugin-react": "^6.0.0",
+    "rcedit": "^5.0.2",
     "tailwindcss": "^4.1.11",
     "typescript": "^5.8.3",
     "vite": "^8.0.5"

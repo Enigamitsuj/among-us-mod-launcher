@@ -43,16 +43,16 @@ func (m Mod) IsRecommendedTag(tag string) bool {
 // Release is a simplified GitHub release shown in the UI.
 type Release struct {
 	TagName      string `json:"tagName"`
-	Name           string `json:"name"`
-	Body           string `json:"body"`
-	PublishedAt    string `json:"publishedAt"`
-	Prerelease     bool   `json:"prerelease"`
-	DownloadURL    string `json:"downloadUrl"`
-	DownloadName   string `json:"downloadName"`
-	DownloadSize   int64  `json:"downloadSize"`
-	HTMLURL        string `json:"htmlUrl"`
-	AssetMatched   bool   `json:"assetMatched"`
-	AssetHint      string `json:"assetHint"`
+	Name         string `json:"name"`
+	Body         string `json:"body"`
+	PublishedAt  string `json:"publishedAt"`
+	Prerelease   bool   `json:"prerelease"`
+	DownloadURL  string `json:"downloadUrl"`
+	DownloadName string `json:"downloadName"`
+	DownloadSize int64  `json:"downloadSize"`
+	HTMLURL      string `json:"htmlUrl"`
+	AssetMatched bool   `json:"assetMatched"`
+	AssetHint    string `json:"assetHint"`
 
 	// Compatibility of this release against the currently detected game.
 	CompatLevel  string `json:"compatLevel"`
@@ -77,36 +77,33 @@ type GameInstall struct {
 
 // GameStatus describes the detected Among Us install(s).
 type GameStatus struct {
-	Found      bool          `json:"found"`
-	Path       string        `json:"path"`
-	Version    string        `json:"version"`
-	Platform   string        `json:"platform"`
-	PlatformLabel string     `json:"platformLabel"`
-	BuildID    string        `json:"buildId"`
-	Branch     string        `json:"branch"`
-	Supported  bool          `json:"supported"`
-	CanInstall bool          `json:"canInstall"`
-	Running    bool          `json:"running"`
-	AssetHint  string        `json:"assetHint"`
-	SteamFound bool          `json:"steamFound"`
-	SteamPath  string        `json:"steamPath"`
-	EpicFound  bool          `json:"epicFound"`
-	ItchFound  bool          `json:"itchFound"`
-	XboxFound  bool          `json:"xboxFound"`
-	Message    string        `json:"message"`
-	Installs   []GameInstall `json:"installs"`
+	Found         bool          `json:"found"`
+	Path          string        `json:"path"`
+	Version       string        `json:"version"`
+	Platform      string        `json:"platform"`
+	PlatformLabel string        `json:"platformLabel"`
+	BuildID       string        `json:"buildId"`
+	Branch        string        `json:"branch"`
+	Supported     bool          `json:"supported"`
+	CanInstall    bool          `json:"canInstall"`
+	Running       bool          `json:"running"`
+	AssetHint     string        `json:"assetHint"`
+	SteamFound    bool          `json:"steamFound"`
+	SteamPath     string        `json:"steamPath"`
+	EpicFound     bool          `json:"epicFound"`
+	ItchFound     bool          `json:"itchFound"`
+	XboxFound     bool          `json:"xboxFound"`
+	Message       string        `json:"message"`
+	Installs      []GameInstall `json:"installs"`
 }
 
 // InstallOptions are user choices for an install run.
 type InstallOptions struct {
-	ModID              string `json:"modId"`
-	VersionTag         string `json:"versionTag"`
-	AmongUsPath        string `json:"amongUsPath"`
-	Platform           string `json:"platform"`
-	InstallLocation    string `json:"installLocation"`
-	CreateShortcut     bool   `json:"createShortcut"`
-	LaunchAfterInstall bool   `json:"launchAfterInstall"`
-	ForceReinstall     bool   `json:"forceReinstall"`
+	ModID          string `json:"modId"`
+	VersionTag     string `json:"versionTag"`
+	AmongUsPath    string `json:"amongUsPath"`
+	Platform       string `json:"platform"`
+	ForceReinstall bool   `json:"forceReinstall"`
 }
 
 // InstallProgress is emitted during installation.
@@ -125,4 +122,5 @@ type InstallState struct {
 	Path      string `json:"path"`
 	Version   string `json:"version"`
 	Exists    bool   `json:"exists"`
+	Managed   bool   `json:"managed"`
 }

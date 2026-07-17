@@ -22,7 +22,7 @@ func main() {
 
 	app := application.New(application.Options{
 		Name:        "Among Us Mod Launcher",
-		Description: "Community-made launcher for Among Us mods. Installer created by FBI OpenUp.",
+		Description: "Community-made launcher for Among Us mods by Enigamitsuj.",
 		Services: []application.Service{
 			application.NewService(launcher),
 		},

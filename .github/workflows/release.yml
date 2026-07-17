@@ -25,33 +25,71 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install Wails v3 CLI
         run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-alpha2.117
 
+      - name: Set executable version metadata
+        shell: pwsh
+        run: |
+          $productVersion = "${{ github.ref_name }}".TrimStart("v")
+          $fileVersion = ($productVersion -split "-")[0]
+          $path = "build/windows/info.json"
+          $info = Get-Content $path -Raw | ConvertFrom-Json
+          $info.fixed.file_version = $fileVersion
+          $info.info.'0000'.ProductVersion = $productVersion
+          $info | ConvertTo-Json -Depth 10 | Set-Content $path -Encoding utf8
+
       - name: Build application
         run: wails3 task build
+
+      - name: Stamp and verify executable metadata
+        shell: pwsh
+        run: |
+          node frontend/scripts/stamp-windows.mjs `
+            bin/among-us-mod-launcher.exe `
+            "${{ github.ref_name }}" `
+            build/windows/icon.ico
+          $expected = "${{ github.ref_name }}".TrimStart("v")
+          $actual = (Get-Item "bin/among-us-mod-launcher.exe").VersionInfo.ProductVersion
+          if ($actual -ne $expected) {
+            throw "ProductVersion is '$actual', expected '$expected'"
+          }
 
       - name: Package release assets
         id: package
         shell: pwsh
         run: |
-          $version = "${{ github.ref_name }}"
+          $tag = "${{ github.ref_name }}"
+          $version = $tag.TrimStart("v")
           $exe = "among-us-mod-launcher-$version-windows-x64.exe"
           Copy-Item "bin/among-us-mod-launcher.exe" $exe
           $hash = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLower()
           "$hash  $exe" | Out-File -FilePath "$exe.sha256" -Encoding ascii -NoNewline
           Write-Host "SHA256: $hash"
           "exe=$exe" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "sha256=$hash" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           draft: false
           generate_release_notes: true
+          body: |
+            ## Download
+            - **Windows x64:** `${{ steps.package.outputs.exe }}`
+            - **SHA256:** `${{ steps.package.outputs.sha256 }}`
+
+            ## First run on Windows
+            The release executable is currently **unsigned**, so SmartScreen may show **Windows protected your PC**.
+            Choose **More info** → **Run anyway**. Verify the SHA256 above if you want an extra integrity check.
+
+            ## Requirements
+            - Windows 10/11 x64
+            - [WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/) (usually already installed)
           files: |
             ${{ steps.package.outputs.exe }}
             ${{ steps.package.outputs.exe }}.sha256

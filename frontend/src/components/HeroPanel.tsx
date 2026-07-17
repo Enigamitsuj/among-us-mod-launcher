@@ -1,6 +1,9 @@
 import { AnimatePresence, motion } from "framer-motion";
+import { Browser } from "@wailsio/runtime";
 import type { Mod, Release } from "../../bindings/github.com/Enigamitsuj/among-us-mod-launcher/internal/mods/models";
 import { formatReleaseNotes, type NoteBlock } from "../lib/releaseNotes";
+
+const LAUNCHER_GITHUB_URL = "https://github.com/Enigamitsuj/among-us-mod-launcher";
 
 type Props = {
   mod: Mod | null;
@@ -12,6 +15,10 @@ export function HeroPanel({ mod, release }: Props) {
   const to = mod?.accentTo ?? "#ef4444";
   const notes = formatReleaseNotes(release?.body ?? "");
   const published = formatDate(release?.publishedAt);
+
+  const openGitHub = () => {
+    void Browser.OpenURL(LAUNCHER_GITHUB_URL);
+  };
 
   return (
     <section className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-white/10 bg-panel">
@@ -112,7 +119,17 @@ export function HeroPanel({ mod, release }: Props) {
         </AnimatePresence>
 
         <footer className="relative z-20 mt-3 shrink-0 rounded-xl border border-white/5 bg-black/35 px-3 py-2 backdrop-blur-sm">
-          <p className="text-xs text-white/75">Installer created by FBI OpenUp</p>
+          <p className="text-xs text-white/75">
+            Installer created by{" "}
+            <button
+              type="button"
+              onClick={openGitHub}
+              className="font-medium text-purple underline decoration-purple/40 underline-offset-2 transition hover:text-purple/90 hover:decoration-purple"
+              title={LAUNCHER_GITHUB_URL}
+            >
+              Enigamitsuj
+            </button>
+          </p>
           <p className="text-[11px] text-muted">
             Community-made launcher for Town of Us: Mira and friends.
           </p>

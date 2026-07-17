@@ -11,7 +11,13 @@ import (
 	"time"
 
 	"github.com/Enigamitsuj/among-us-mod-launcher/internal/fsutil"
+	"github.com/Enigamitsuj/among-us-mod-launcher/internal/installrecord"
 	"github.com/Enigamitsuj/among-us-mod-launcher/internal/mods"
+)
+
+const (
+	stagingSuffix = ".__aumod-new"
+	backupSuffix  = ".__aumod-old"
 )
 
 // ProgressFunc receives install progress updates.
@@ -29,12 +35,13 @@ func New() *Service {
 }
 
 // DestinationExists reports whether the mod folder already exists.
-func (s *Service) DestinationExists(installLocation, folderName string) bool {
-	return fsutil.DirExists(fsutil.JoinInstallPath(installLocation, folderName))
+func (s *Service) DestinationExists(installRoot, folderName string) bool {
+	return fsutil.DirExists(fsutil.JoinInstallPath(installRoot, folderName))
 }
 
 // Install downloads a release ZIP and creates a sibling modded Among Us copy.
-// The original game directory is never modified.
+// The original game directory is never modified. Reinstalls build into a
+// staging folder first, then swap into place so a failed update keeps the old copy.
 func (s *Service) Install(opts mods.InstallOptions, mod mods.Mod, downloadURL string, onProgress ProgressFunc) (string, error) {
 	emit := func(stage, message string, percent float64, done bool, errMsg, installDir string) {
 		if onProgress != nil {
@@ -59,25 +66,18 @@ func (s *Service) Install(opts mods.InstallOptions, mod mods.Mod, downloadURL st
 		return "", fmt.Errorf("no download available for this version")
 	}
 
-	destRoot := opts.InstallLocation
-	if destRoot == "" {
-		var err error
-		destRoot, err = fsutil.DefaultInstallRoot()
-		if err != nil {
-			return "", err
-		}
-	}
+	destRoot := filepath.Dir(filepath.Clean(opts.AmongUsPath))
 	dest := fsutil.JoinInstallPath(destRoot, mod.FolderName)
+	staging := dest + stagingSuffix
+	backup := dest + backupSuffix
 
 	if fsutil.DirExists(dest) && !opts.ForceReinstall {
 		return "", ErrAlreadyExists
 	}
-	if fsutil.DirExists(dest) && opts.ForceReinstall {
-		emit("preparing", "Removing previous installation...", 2, false, "", dest)
-		if err := os.RemoveAll(dest); err != nil {
-			return "", fmt.Errorf("could not remove existing installation")
-		}
-	}
+
+	// Clear leftover staging/backup from a previous interrupted update.
+	_ = os.RemoveAll(staging)
+	_ = os.RemoveAll(backup)
 
 	tmpDir, err := os.MkdirTemp("", "aumod-install-*")
 	if err != nil {
@@ -100,21 +100,65 @@ func (s *Service) Install(opts mods.InstallOptions, mod mods.Mod, downloadURL st
 		return "", fmt.Errorf("failed to extract the download")
 	}
 
-	emit("installing", "Installing...", 70, false, "", dest)
-	if err := copyDir(opts.AmongUsPath, dest); err != nil {
-		_ = os.RemoveAll(dest)
+	emit("installing", "Preparing new installation...", 70, false, "", dest)
+	if err := copyDir(opts.AmongUsPath, staging); err != nil {
+		_ = os.RemoveAll(staging)
 		return "", fmt.Errorf("failed to copy Among Us files")
 	}
 
 	emit("installing", "Applying mod files...", 88, false, "", dest)
 	modRoot := findModRoot(extractDir)
-	if err := mergeDir(modRoot, dest); err != nil {
-		_ = os.RemoveAll(dest)
+	if err := mergeDir(modRoot, staging); err != nil {
+		_ = os.RemoveAll(staging)
 		return "", fmt.Errorf("failed to apply mod files")
+	}
+
+	if err := installrecord.Save(staging, installrecord.Record{
+		ModID:    opts.ModID,
+		Path:     dest,
+		Version:  opts.VersionTag,
+		Platform: opts.Platform,
+	}); err != nil {
+		_ = os.RemoveAll(staging)
+		return "", fmt.Errorf("failed to finalize the mod installation")
+	}
+
+	if !fileExists(filepath.Join(staging, "Among Us.exe")) {
+		_ = os.RemoveAll(staging)
+		return "", fmt.Errorf("failed to finalize the mod installation")
+	}
+
+	emit("installing", "Updating installation...", 95, false, "", dest)
+	if err := promoteStaging(staging, dest, backup); err != nil {
+		return "", err
 	}
 
 	emit("finished", "Finished.", 100, true, "", dest)
 	return dest, nil
+}
+
+// promoteStaging moves a fully prepared staging directory into dest.
+// If dest already exists, it is renamed aside first and restored if the swap fails.
+func promoteStaging(staging, dest, backup string) error {
+	if fsutil.DirExists(dest) {
+		if err := os.Rename(dest, backup); err != nil {
+			_ = os.RemoveAll(staging)
+			return fmt.Errorf("could not update existing installation")
+		}
+		if err := os.Rename(staging, dest); err != nil {
+			_ = os.Rename(backup, dest)
+			_ = os.RemoveAll(staging)
+			return fmt.Errorf("could not update existing installation")
+		}
+		_ = os.RemoveAll(backup)
+		return nil
+	}
+
+	if err := os.Rename(staging, dest); err != nil {
+		_ = os.RemoveAll(staging)
+		return fmt.Errorf("could not finalize the mod installation")
+	}
+	return nil
 }
 
 func (s *Service) downloadFile(url, dest string, onPercent func(float64)) error {

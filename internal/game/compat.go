@@ -78,7 +78,7 @@ func EvaluateCompatibility(inst *Install) {
 		inst.Supported = true
 		inst.CanInstall = true
 		if inst.Version == "unknown" || inst.Version == "" {
-			inst.Message = "Epic Among Us found. The modded copy will be installed next to the launcher (required for Epic)."
+			inst.Message = "Epic Among Us found. The modded copy will be installed beside the game (required for Epic)."
 			return
 		}
 		inst.Message = "Epic Games · Among Us v" + displayVer(inst.Version) + " · Compatible"

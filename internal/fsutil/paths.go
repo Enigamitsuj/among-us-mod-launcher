@@ -5,24 +5,6 @@ import (
 	"path/filepath"
 )
 
-// LauncherDir returns the directory containing the running executable.
-func LauncherDir() (string, error) {
-	exe, err := os.Executable()
-	if err != nil {
-		return "", err
-	}
-	resolved, err := filepath.EvalSymlinks(exe)
-	if err != nil {
-		resolved = exe
-	}
-	return filepath.Dir(resolved), nil
-}
-
-// DefaultInstallRoot is next to the launcher executable (not AppData/Temp).
-func DefaultInstallRoot() (string, error) {
-	return LauncherDir()
-}
-
 // JoinInstallPath builds "<root>/<mod folder name>".
 func JoinInstallPath(root, folderName string) string {
 	return filepath.Join(root, folderName)

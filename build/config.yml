@@ -3,13 +3,13 @@
 version: '3'
 
 info:
-  companyName: "FBI OpenUp"
+  companyName: "Enigamitsuj"
   productName: "Among Us Mod Launcher"
-  productIdentifier: "com.fbiopenup.amongusmodlauncher"
+  productIdentifier: "com.enigamitsuj.amongusmodlauncher"
   description: "Community-made launcher for Among Us mods"
-  copyright: "(c) 2026, FBI OpenUp"
-  comments: "Installer created by FBI OpenUp"
-  version: "0.1.0"
+  copyright: "(c) 2026, Enigamitsuj"
+  comments: "Community mod hub and launcher for Among Us"
+  version: "1.0.0"
 
 dev_mode:
   root_path: .

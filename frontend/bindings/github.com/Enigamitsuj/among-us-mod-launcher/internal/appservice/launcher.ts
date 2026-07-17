@@ -21,24 +21,20 @@ export function CloseWindow(): $CancellablePromise<void> {
     return $Call.ByID(55242247);
 }
 
-export function DestinationExists(modID: string, installLocation: string): $CancellablePromise<boolean> {
-    return $Call.ByID(4194768515, modID, installLocation);
+export function DestinationExists(modID: string, amongUsPath: string): $CancellablePromise<boolean> {
+    return $Call.ByID(4194768515, modID, amongUsPath);
 }
 
 export function DetectGame(): $CancellablePromise<mods$0.GameStatus> {
     return $Call.ByID(1360421780);
 }
 
-export function GetDefaultInstallLocation(): $CancellablePromise<string> {
-    return $Call.ByID(2145961856);
-}
-
 export function GetDefaultMod(): $CancellablePromise<mods$0.Mod> {
     return $Call.ByID(555649552);
 }
 
-export function GetInstallState(modID: string, installLocation: string): $CancellablePromise<mods$0.InstallState> {
-    return $Call.ByID(731559087, modID, installLocation);
+export function GetInstallState(modID: string, amongUsPath: string): $CancellablePromise<mods$0.InstallState> {
+    return $Call.ByID(731559087, modID, amongUsPath);
 }
 
 export function GetMods(): $CancellablePromise<mods$0.Mod[] | null> {
@@ -56,6 +52,10 @@ export function Install(opts: mods$0.InstallOptions): $CancellablePromise<void> 
     return $Call.ByID(1672524380, opts);
 }
 
+export function IsGameRunning(): $CancellablePromise<boolean> {
+    return $Call.ByID(3300111362);
+}
+
 export function LaunchMod(installPath: string): $CancellablePromise<void> {
     return $Call.ByID(886002982, installPath);
 }
@@ -65,15 +65,12 @@ export function MinimizeWindow(): $CancellablePromise<void> {
 }
 
 /**
- * PickInstallDirectory opens a native folder picker. Empty string means cancelled.
- */
-export function PickInstallDirectory(current: string): $CancellablePromise<string> {
-    return $Call.ByID(3243511614, current);
-}
-
-/**
  * SetWindow stores the main window handle for minimize/close.
  */
 export function SetWindow(w: application$0.WebviewWindow | null): $CancellablePromise<void> {
     return $Call.ByID(1835761935, w);
+}
+
+export function Uninstall(modID: string, amongUsPath: string): $CancellablePromise<void> {
+    return $Call.ByID(3505174981, modID, amongUsPath);
 }

@@ -49,9 +49,6 @@ export interface InstallOptions {
     "versionTag": string;
     "amongUsPath": string;
     "platform": string;
-    "installLocation": string;
-    "createShortcut": boolean;
-    "launchAfterInstall": boolean;
     "forceReinstall": boolean;
 }
 
@@ -75,6 +72,7 @@ export interface InstallState {
     "path": string;
     "version": string;
     "exists": boolean;
+    "managed": boolean;
 }
 
 /**

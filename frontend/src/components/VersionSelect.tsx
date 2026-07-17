@@ -5,11 +5,12 @@ import type { Release } from "../../bindings/github.com/Enigamitsuj/among-us-mod
 type Props = {
   releases: Release[];
   value: string;
+  installedTag?: string;
   disabled?: boolean;
   onChange: (tag: string) => void;
 };
 
-export function VersionSelect({ releases, value, disabled, onChange }: Props) {
+export function VersionSelect({ releases, value, installedTag, disabled, onChange }: Props) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const listId = useId();
@@ -70,6 +71,7 @@ export function VersionSelect({ releases, value, disabled, onChange }: Props) {
               <CompatDot level={selected.compatLevel} />
               <span>{selected.tagName}</span>
               {selected.recommended && <Badge text="Recommended" />}
+              {installedTag && selected.tagName === installedTag && <Badge text="Installed" />}
               {labelFor(selected).map((tag) => (
                 <Badge key={tag} text={tag} />
               ))}
@@ -134,6 +136,7 @@ export function VersionSelect({ releases, value, disabled, onChange }: Props) {
                       <span className="truncate font-medium">{r.tagName}</span>
                     </span>
                     <span className="flex shrink-0 items-center gap-1">
+                      {installedTag && r.tagName === installedTag && <Badge text="Installed" />}
                       {r.recommended && <Badge text="Rec" />}
                       {labelFor(r).map((tag) => (
                         <Badge key={tag} text={tag} />
@@ -174,7 +177,7 @@ function Badge({ text }: { text: string }) {
   const tone =
     text === "Latest"
       ? "bg-purple/20 text-purple"
-      : text === "Stable"
+      : text === "Stable" || text === "Installed"
         ? "bg-emerald-500/15 text-emerald-300"
         : text === "Recommended" || text === "Rec"
           ? "bg-purple/20 text-purple"
